@@ -216,6 +216,8 @@ def hitung_fitur_glcm(image_segment_cr):
     # normed: True untuk normalisasi (penting agar fitur konsisten antar gambar)
     
     try:
+        print(f"Bentuk gambar GLCM: {image_segment_cr.shape}, nilai unik: {np.unique(image_segment_cr)}")
+
         glcm = graycomatrix(normalized_segment, distances=[1], angles=[0, np.pi/4, np.pi/2, 3*np.pi/4], levels=256,
                             symmetric=True, normed=True)
         # MENGAMBIL RATA-RATA DARI 4 ARAH UNTUK SETIAP FITUR
@@ -223,10 +225,11 @@ def hitung_fitur_glcm(image_segment_cr):
         
         # Contoh: graycoprops(glcm, 'contrast') akan menghasilkan array seperti [[c0, c45, c90, c135]]
         # np.mean(..., axis=1) akan merata-ratakan nilai-nilai ini.
-        contrast = np.mean(graycoprops(glcm, 'contrast'))[0] # Mengambil rata-rata dari 4 arah, lalu ambil elemen pertamanya
-        correlation = np.mean(graycoprops(glcm, 'correlation'))[0]
-        energy = np.mean(graycoprops(glcm, 'energy'))[0]
-        homogeneity = np.mean(graycoprops(glcm, 'homogeneity'))[0]
+        contrast = np.mean(graycoprops(glcm, 'contrast'))
+        correlation = np.mean(graycoprops(glcm, 'correlation'))
+        energy = np.mean(graycoprops(glcm, 'energy'))
+        homogeneity = np.mean(graycoprops(glcm, 'homogeneity'))
+        print(f"Bentuk matriks GLCM: {glcm.shape}")
 
         return {
             'glcm_contrast': contrast,
@@ -326,7 +329,7 @@ def ekstraksi_bentuk_dan_pemberian_label_50K_Depan(final_segmentation_cleaned, c
             label = "Pola Patokan Kecil"
         elif 0.2 < center_x_norm < 0.8  and center_y_norm < 0.7 and 5000 < area < 50000 and 0.5 < aspect_ratio < 5.0:
             label = "Pola Patokan Besar"
-        #print(f"\tLabel yang ditentukan: {label}")
+        print(f"\tLabel yang ditentukan: {label}")
 
         # Tambahkan ke dictionary jika itu salah satu ciri utama
         if label in ["Pola Patokan Kecil", 'Pola Patokan Besar'] and label not in labeled_objects_50k_Depan:
@@ -376,7 +379,7 @@ def ekstraksi_bentuk_dan_pemberian_label_50K_Depan(final_segmentation_cleaned, c
             final_features_for_anfis[f'{ciri_name}_glcm_correlation'] = glcm_features['glcm_correlation']
             final_features_for_anfis[f'{ciri_name}_glcm_energy'] = glcm_features['glcm_energy']
             final_features_for_anfis[f'{ciri_name}_glcm_homogeneity'] = glcm_features['glcm_homogeneity']
-            #print(f"Ini adalah: {final_features_for_anfis}")
+            print(f"Ini adalah: {final_features_for_anfis}")
         else:
             # Jika ciri tidak ditemukan, isi dengan nilai default (misal 0.0)
             # Ini PENTING agar jumlah fitur selalu konsisten untuk ANFIS
@@ -501,7 +504,7 @@ def ekstraksi_bentuk_dan_pemberian_label_50K(final_segmentation_cleaned, cr_chan
             label = "Indonesia"
         elif center_x_norm > 0.5 and center_y_norm < 0.5 and 1400 < area < 2000 and aspect_ratio > 4.0:
             label = "Bank Indonesia"
-        #print(f"\tLabel yang ditentukan: {label}")
+        print(f"\tLabel yang ditentukan: {label}")
         # Tambahkan ke dictionary jika itu salah satu ciri utama
         if label in ["Logo BI", "Angka Nominal", "Bank", "Indonesia", "Bank Indonesia"] and label not in labeled_objects_50k:
             labeled_objects_50k[label] = {
@@ -548,12 +551,12 @@ def ekstraksi_bentuk_dan_pemberian_label_50K(final_segmentation_cleaned, cr_chan
             plt.title(f'Masked GLCM Area for {ciri_name}')
             plt.show()'''
 
-            #print(f"FINAL FEATURES FOR ANFIS GLCM")
+            print(f"FINAL FEATURES FOR ANFIS GLCM")
             final_features_for_anfis[f'{ciri_name}_glcm_contrast'] = glcm_features['glcm_contrast']
             final_features_for_anfis[f'{ciri_name}_glcm_correlation'] = glcm_features['glcm_correlation']
             final_features_for_anfis[f'{ciri_name}_glcm_energy'] = glcm_features['glcm_energy']
             final_features_for_anfis[f'{ciri_name}_glcm_homogeneity'] = glcm_features['glcm_homogeneity']
-            #print(f"Ini adalah: {final_features_for_anfis}")
+            print(f"Ini adalah: {final_features_for_anfis}")
         else:
             # Jika ciri tidak ditemukan, isi dengan nilai default (misal 0.0)
             # Ini PENTING agar jumlah fitur selalu konsisten untuk ANFIS
@@ -665,7 +668,7 @@ def ekstraksi_bentuk_dan_pemberian_label_100K_Depan(final_segmentation_cleaned, 
 
         center_x_norm = (x + w/2) / final_segmentation_cleaned.shape[1]
         center_y_norm = (y + h/2) / final_segmentation_cleaned.shape[0]
-        ''' print(f"\tAspectRatio={aspect_ratio:.2f}, \n\tSolidity={solidity:.2f}")
+        '''print(f"\tAspectRatio={aspect_ratio:.2f}, \n\tSolidity={solidity:.2f}")
         print(f"\tCenter Norm: ({center_x_norm:.2f}, {center_y_norm:.2f})")
         print(f"\tHu Moments (log): {hu_moments_log.tolist()}")'''
 
@@ -676,7 +679,7 @@ def ekstraksi_bentuk_dan_pemberian_label_100K_Depan(final_segmentation_cleaned, 
             label = "Pola Patokan 2"
         elif 0.3 < center_x_norm < 0.4 and center_y_norm > 0.65 and 90 < area < 600 and 0.5 < aspect_ratio < 5.0:
             label = "Pola Patokan 3"
-        #print(f"\tLabel yang ditentukan: {label}")
+        print(f"\tLabel yang ditentukan: {label}")
 
         # Tambahkan ke dictionary jika itu salah satu ciri utama
         if label in ["Pola Patokan 1", 'Pola Patokan 2', 'Pola Patokan 3'] and label not in labeled_objects_100k_Depan:
@@ -846,7 +849,7 @@ def ekstraksi_bentuk_dan_pemberian_label_100K(final_segmentation_cleaned, cr_cha
             label = "Indonesia"
         elif center_x_norm > 0.5 and center_y_norm < 0.4 and 1300 < area < 3500 and aspect_ratio > 4.0:
             label = "Bank Indonesia"
-        #print(f"\tLabel yang ditentukan: {label}")
+        print(f"\tLabel yang ditentukan: {label}")
         # Tambahkan ke dictionary jika itu salah satu ciri utama
         if label in ["Angka Nominal", "Bank", "Indonesia", "Bank Indonesia"] and label not in labeled_objects_100k:
             labeled_objects_100k[label] = {
