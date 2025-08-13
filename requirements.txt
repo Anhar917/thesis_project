@@ -35,6 +35,7 @@ idna==3.3
 importlib-metadata==4.12.0
 itsdangerous==2.1.2
 Jinja2==3.1.2
+joblib==1.1.0
 jsonpointer==2.3
 jsonschema==4.10.3
 kiwisolver
@@ -78,7 +79,9 @@ requests==2.28.1
 requests-toolbelt==0.10.1
 rich==13.3.1
 scipy==1.10.1
+scikit-fuzzy
 scikit-image
+scikit-learn
 semver==2.10.2
 simplejson==3.18.3
 six==1.16.0

@@ -5,7 +5,11 @@ import os
 import glob
 import re
 import time
+import joblib
 from skimage.feature import graycomatrix, graycoprops
+import skfuzzy as fuzz
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 
 def ambil_gambar_dari_webcam(base_dataset_dir='Dataset Uang Kertas'):
     
@@ -117,6 +121,51 @@ def ambil_gambar_dari_webcam(base_dataset_dir='Dataset Uang Kertas'):
     cap.release()
     cv2.destroyAllWindows()
     return None
+
+def ambil_gambar_langsung():
+    print("\n--- Mode Pengujian Langsung: Ambil Gambar dari Webcam ---")
+    
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Error: Tidak dapat membuka webcam.")
+        return None
+    
+    # Set resolusi yang diinginkan
+    desired_width = 854
+    desired_height = 480
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, desired_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, desired_height)
+    actual_cam_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    actual_cam_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    print("\nWebcam berhasil dibuka. Tekan 's' untuk mengambil gambar.")
+    print("Tekan 'q' untuk keluar.")
+    
+    gambar_tertangkap = None
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Gagal membaca frame dari webcam.")
+            break
+        
+        # Tampilkan teks dan jendela sesuai permintaan Anda
+        display_text = "Pengujian Langsung, Tekan 's' untuk ambil gambar atau 'q' untuk keluar."
+        cv2.putText(frame, display_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.imshow('Live Webcam Preview', frame)
+        cv2.resizeWindow('Live Webcam Preview', actual_cam_width, actual_cam_height)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('s'):
+            print("Gambar diambil.")
+            gambar_tertangkap = frame.copy()
+            break
+        elif key == ord('q'):
+            print("Keluar dari mode pengambilan gambar.")
+            break
+            
+    cap.release()
+    cv2.destroyAllWindows()
+    return gambar_tertangkap
 
 def identifikasi_pecahan_berdasarkan_cr_histogram(cr_channel_input):
     
@@ -870,8 +919,6 @@ def ekstraksi_bentuk_dan_pemberian_label_100K(final_segmentation_cleaned, cr_cha
         if ciri_name in labeled_objects_100k: # Pastikan ciri tersebut berhasil ditemukan dan dilabeli
             data_ciri = labeled_objects_100k[ciri_name]
             mask_ciri = data_ciri['mask'] # Ini dia mask untuk ciri spesifik!
-
-            # --- MULAI BAGIAN BARU: EKSTRAKSI FITUR BENTUK DAN TEKSTUR ---
             
             # 1. Simpan Fitur Bentuk yang Sudah Dihitung
             # (Anda sudah memiliki ini dari langkah pelabelan sebelumnya)
@@ -902,9 +949,6 @@ def ekstraksi_bentuk_dan_pemberian_label_100K(final_segmentation_cleaned, cr_cha
             final_features_for_anfis[f'{ciri_name}_glcm_homogeneity'] = glcm_features['glcm_homogeneity']
             #print(f"Ini adalah: {final_features_for_anfis}")
         else:
-            # Jika ciri tidak ditemukan, isi dengan nilai default (misal 0.0)
-            # Ini PENTING agar jumlah fitur selalu konsisten untuk ANFIS
-            # Hitung berapa banyak fitur yang diharapkan untuk satu ciri (misal 5 bentuk + 7 Hu + 2 center + 4 GLCM = 18 fitur per ciri)
             num_features_per_ciri = 5 + 7 + 4 # sesuaikan dengan jumlah fitur yang Anda ekstrak
                 
             # Buat placeholder untuk setiap fitur spesifik:
@@ -920,10 +964,6 @@ def ekstraksi_bentuk_dan_pemberian_label_100K(final_segmentation_cleaned, cr_cha
             final_features_for_anfis[f'{ciri_name}_glcm_energy'] = 0.0
             final_features_for_anfis[f'{ciri_name}_glcm_homogeneity'] = 0.0
 
-    # Terakhir, ubah dictionary `final_features_for_anfis` menjadi array/list numerik
-    # yang urutannya KONSISTEN. Ini sangat penting untuk ANFIS.
-    # Anda perlu mendefinisikan urutan kunci fitur Anda.
-    # Contoh urutan kunci untuk 50K:'''
     ordered_feature_keys_100K = []
     for ciri_name in ciri_names_100K:
         ordered_feature_keys_100K.extend([
@@ -933,7 +973,6 @@ def ekstraksi_bentuk_dan_pemberian_label_100K(final_segmentation_cleaned, cr_cha
             f'{ciri_name}_glcm_contrast', f'{ciri_name}_glcm_correlation',
             f'{ciri_name}_glcm_energy', f'{ciri_name}_glcm_homogeneity'
         ])
-    #print(f"FINAL ANFIS INPUT VECTOR")
     final_anfis_input_vector = [final_features_for_anfis[key] for key in ordered_feature_keys_100K]
     #print(f"Ini adalah: {final_anfis_input_vector}")
 
@@ -969,15 +1008,11 @@ def proses_gambar(gambar, nama_file_original=" ", uang_type=None):
     '''cv2.imshow('HASIL MASK UANG KERTAS (Tekan tombol apa saja untuk lanjut)', mask_uang_kertas)
     cv2.waitKey(0) # Tunggu sampai tombol ditekan
     cv2.destroyWindow('HASIL MASK UANG KERTAS (Tekan tombol apa saja untuk lanjut)')''' # Tutup jendela setelah tombol ditekan
-    #print("Mask uang kertas ditampilkan. Melanjutkan proses...")
-    # --- END MENAMPILKAN HASIL MASK ---
 
     # 2. Konversi ke YCbCr
     gambar_YCbCr = cv2.cvtColor(gambar, cv2.COLOR_BGR2YCrCb)
     #cv2.imshow('Format YCbCr', gambar_YCbCr)
     
-    #print("Gambar diubah ke YCbCr.")
-    #print("Tekan tombol apa saja untuk menutup jendela hasil pemrosesan.")
     '''cv2.waitKey(0) # Tunggu sampai tombol ditekan untuk menutup jendela hasil
     cv2.destroyAllWindows()'''
 
@@ -1077,10 +1112,6 @@ def proses_gambar(gambar, nama_file_original=" ", uang_type=None):
     #plt.tight_layout()
     plt.show()'''
 
-    # --- Logika Thresholding Berdasarkan uang_type ---
-    
-    # Tentukan apakah ini uang tampak depan yang memerlukan looping thresholding
-    #is_depan_uang_kertas = (uang_type == '50K_tampak depan' or uang_type == '100K_tampak depan')
     if uang_type == '50K_tampak depan':
         pecahan_teridentifikasi = identifikasi_pecahan_berdasarkan_cr_histogram(cr_channel_masked)
         '''print(f"DEBUG: Pecahan teridentifikasi: {pecahan_teridentifikasi}")
@@ -1112,12 +1143,8 @@ def proses_gambar(gambar, nama_file_original=" ", uang_type=None):
         plt.show()'''
 
     elif uang_type == '100K_tampak depan':
-        # Menggunakan parameter untuk 100 Ribu.
-        #print("Menggunakan thresholding biasa untuk 100 Ribu.")
-        # Tuning ambang batas ini! Lihat histogram Cr untuk 100K.
-        # Nominal 100K terlihat TERANG di Cr, jadi pakai THRESH_BINARY.
+        
         threshold_value_100k_high = 163 # Contoh: cari nilai di mana 100000 mulai putih
-        #print(f" DEBUG: Menggunakan nilai threshold untuk {uang_type} = {threshold_value_100k_high}")
         _, final_segmentation = cv2.threshold(cr_channel_masked, threshold_value_100k_high, 255, cv2.THRESH_BINARY)
         '''plt.figure(figsize=(12, 5))
         plt.plot()
@@ -1143,10 +1170,6 @@ def proses_gambar(gambar, nama_file_original=" ", uang_type=None):
         #print(f"DEBUG: Pecahan teridentifikasi: {pecahan_teridentifikasi}")
         
         if pecahan_teridentifikasi == '100K':
-            # Menggunakan parameter untuk 100 Ribu.
-            #print("Menggunakan thresholding biasa untuk 100 Ribu.")
-            # Tuning ambang batas ini! Lihat histogram Cr untuk 100K.
-            # Nominal 100K terlihat TERANG di Cr, jadi pakai THRESH_BINARY.
             threshold_value_100k_high = 180 # Contoh: cari nilai di mana 100000 mulai putih
             #print(f" DEBUG: Menggunakan nilai threshold untuk {uang_type} = {threshold_value_100k_high}")
             _, final_segmentation = cv2.threshold(cr_channel_masked, threshold_value_100k_high, 255, cv2.THRESH_BINARY)
@@ -1169,10 +1192,6 @@ def proses_gambar(gambar, nama_file_original=" ", uang_type=None):
             plt.show()'''
             
         elif pecahan_teridentifikasi == '50K':
-            #Menggunakan parameter untuk 50 Ribu.
-            #print("Menggunakan thresholding biasa untuk 50 Ribu.")
-            # Tuning ambang batas ini! Lihat histogram Cr untuk 100K.
-            # Nominal 100K terlihat TERANG di Cr, jadi pakai THRESH_BINARY.
             threshold_50k_high = 100 
             threshold_50k_low = 20
             pola_ditemukan = False # Flag untuk menandakan pola patokan telah ditemukan
@@ -1233,8 +1252,123 @@ def proses_gambar(gambar, nama_file_original=" ", uang_type=None):
         print(f"Peringatan: Tipe uang '{uang_type_for_features}' tidak dikenali untuk ekstraksi fitur. Skipping.")
         final_hasil_ekstraksi = None
 
-    # Pastikan Anda mengembalikan final_ciri_khusus dari proses_gambar
     return final_hasil_ekstraksi
+
+def proses_gambar_akhir(gambar): 
+    print(f"\n--- Memproses Gambar ---")
+    
+    gambar_RGB = cv2.cvtColor(gambar, cv2.COLOR_BGR2RGB)
+    '''cv2.imshow('Format RGB', gambar_RGB)
+    cv2.waitKey(0)'''
+
+    # 1. Panggil fungsi untuk membuat mask uang kertas
+    mask_uang_kertas = buat_mask_uang_kertas(gambar_RGB)
+
+    # --- MENAMPILKAN HASIL MASK UANG KERTAS SEBELUM MELANJUTKAN ---
+    '''cv2.imshow('HASIL MASK UANG KERTAS (Tekan tombol apa saja untuk lanjut)', mask_uang_kertas)
+    cv2.waitKey(0) # Tunggu sampai tombol ditekan
+    cv2.destroyWindow('HASIL MASK UANG KERTAS (Tekan tombol apa saja untuk lanjut)')''' # Tutup jendela setelah tombol ditekan
+
+    # 2. Konversi ke YCbCr
+    gambar_YCbCr = cv2.cvtColor(gambar, cv2.COLOR_BGR2YCrCb)
+    #cv2.imshow('Format YCbCr', gambar_YCbCr)
+    
+    '''cv2.waitKey(0) # Tunggu sampai tombol ditekan untuk menutup jendela hasil
+    cv2.destroyAllWindows()'''
+
+    # 3. Hitung Rata-Rata Tiap Saluran Y, Cb, dan Cr
+    y_channel, cr_channel, cb_channel = cv2.split(gambar_YCbCr)
+    '''mean_Y = np.mean(y_channel) 
+    mean_Cr = np.mean(cr_channel) 
+    mean_Cb = np.mean(cb_channel)'''
+
+    '''print(f"\nRata-rata nilai YCbCr keseluruhan gambar:")
+    print(f"  Rata-rata Luminance (Y): {mean_Y:.2f}")
+    print(f"  Rata-rata Blue-difference Chroma (Cb): {mean_Cb:.2f}")
+    print(f"  Rata-rata Red-difference Chroma (Cr): {mean_Cr:.2f}")'''
+
+    '''if cr_channel is None or cr_channel.size == 0:
+        print(f"ERROR: Saluran Cr tidak valid setelah persiapan untuk {nama_file_original}.")
+        return None, None'''
+
+    # 4. Terapkan Mask Uang Kertas ke Saluran Cr
+    cr_channel_masked = cv2.bitwise_and(cr_channel, cr_channel, mask=mask_uang_kertas)
+    #print("Saluran Cr dimask dengan mask uang kertas.")
+
+    #mean_Cr_masked = np.mean(cr_channel_masked)
+    # 2. Identifikasi sebagai uang tampak BELAKANG terlebih dahulu
+    pecahan_teridentifikasi = identifikasi_pecahan_berdasarkan_cr_histogram(cr_channel_masked)
+    final_hasil_ekstraksi = None
+    uang_terdeteksi = "UNKNOWN"
+
+    if pecahan_teridentifikasi == '50K':
+        print("INFO: Terdeteksi 50K tampak belakang. Ekstraksi fitur...")
+        # Lakukan thresholding dan pasca-pemrosesan khusus untuk 50K tampak belakang
+        threshold_50k_low = 20
+        threshold_50k_high = 100
+        _, th_bawah = cv2.threshold(cr_channel_masked, threshold_50k_low, 255, cv2.THRESH_BINARY)
+        _, th_atas = cv2.threshold(cr_channel_masked, threshold_50k_high, 255, cv2.THRESH_BINARY_INV)
+        final_segmentation = cv2.bitwise_and(th_bawah, th_atas)
+        # Pasca-pemrosesan
+        kernel = np.ones((3,3),np.uint8)
+        final_segmentation_cleaned = cv2.morphologyEx(final_segmentation, cv2.MORPH_OPEN, kernel, iterations=2)
+        final_segmentation_cleaned = cv2.morphologyEx(final_segmentation_cleaned, cv2.MORPH_CLOSE, kernel, iterations=2)
+        # Ekstraksi fitur
+        final_hasil_ekstraksi = ekstraksi_bentuk_dan_pemberian_label_50K(final_segmentation_cleaned, cr_channel_masked)
+        if final_hasil_ekstraksi is not None:
+            uang_terdeteksi = "50K_tampak belakang"
+    elif pecahan_teridentifikasi == '100K':
+        print("INFO: Terdeteksi 100K tampak belakang. Ekstraksi fitur...")
+        # Lakukan thresholding dan pasca-pemrosesan khusus untuk 100K tampak belakang
+        threshold_value_100k_high = 180
+        _, final_segmentation = cv2.threshold(cr_channel_masked, threshold_value_100k_high, 255, cv2.THRESH_BINARY)
+        # Pasca-pemrosesan
+        kernel = np.ones((3,3),np.uint8)
+        final_segmentation_cleaned = cv2.morphologyEx(final_segmentation, cv2.MORPH_OPEN, kernel, iterations=2)
+        final_segmentation_cleaned = cv2.morphologyEx(final_segmentation_cleaned, cv2.MORPH_CLOSE, kernel, iterations=1)
+        # Ekstraksi fitur
+        final_hasil_ekstraksi = ekstraksi_bentuk_dan_pemberian_label_100K(final_segmentation_cleaned, cr_channel_masked)
+        if final_hasil_ekstraksi is not None:
+            uang_terdeteksi = "100K_tampak belakang"
+
+    # 3. Jika bukan tampak belakang, coba identifikasi sebagai tampak DEPAN
+    if final_hasil_ekstraksi is None:
+        print("INFO: Tidak terdeteksi sebagai tampak belakang. Mencoba sebagai tampak depan...")
+        
+        # Opsi 3a: Coba 50K tampak depan
+        print("INFO: Mencoba ekstraksi fitur untuk 50K tampak depan...")
+        # Lakukan thresholding dan pasca-pemrosesan khusus untuk 50K tampak depan
+        threshold_50k_low = 20
+        threshold_50k_high = 100
+        _, th_bawah = cv2.threshold(cr_channel_masked, threshold_50k_low, 255, cv2.THRESH_BINARY)
+        _, th_atas = cv2.threshold(cr_channel_masked, threshold_50k_high, 255, cv2.THRESH_BINARY_INV)
+        final_segmentation = cv2.bitwise_and(th_bawah, th_atas)
+        # Pasca-pemrosesan
+        kernel = np.ones((3,3),np.uint8)
+        final_segmentation_cleaned = cv2.morphologyEx(final_segmentation, cv2.MORPH_OPEN, kernel, iterations=2)
+        final_segmentation_cleaned = cv2.morphologyEx(final_segmentation_cleaned, cv2.MORPH_CLOSE, kernel, iterations=2)
+        # Ekstraksi fitur
+        final_hasil_ekstraksi = ekstraksi_bentuk_dan_pemberian_label_50K_Depan(final_segmentation_cleaned, cr_channel_masked)
+        if final_hasil_ekstraksi is not None:
+            uang_terdeteksi = "50K_tampak depan"
+        # Opsi 3b: Jika 50K tampak depan gagal, coba 100K tampak depan
+        if final_hasil_ekstraksi is None:
+            print("INFO: Ekstraksi fitur 50K tampak depan gagal. Mencoba 100K tampak depan...")
+            # Lakukan thresholding dan pasca-pemrosesan khusus untuk 100K tampak depan
+            threshold_value_100k_high = 163
+            _, final_segmentation = cv2.threshold(cr_channel_masked, threshold_value_100k_high, 255, cv2.THRESH_BINARY)
+            # Pasca-pemrosesan
+            kernel = np.ones((3,3),np.uint8)
+            final_segmentation_cleaned = cv2.morphologyEx(final_segmentation, cv2.MORPH_OPEN, kernel, iterations=2)
+            final_segmentation_cleaned = cv2.morphologyEx(final_segmentation_cleaned, cv2.MORPH_CLOSE, kernel, iterations=1)
+            # Ekstraksi fitur
+            final_hasil_ekstraksi = ekstraksi_bentuk_dan_pemberian_label_100K_Depan(final_segmentation_cleaned, cr_channel_masked)
+            if final_hasil_ekstraksi is not None:
+                uang_terdeteksi = "100K_tampak depan"
+    # 4. Kembalikan hasil ekstraksi dan jenis uang yang terdeteksi
+    if final_hasil_ekstraksi is None:
+        print("PERINGATAN: Gagal mengekstrak fitur untuk semua jenis uang yang dicoba.")
+    return final_hasil_ekstraksi, uang_terdeteksi
     
     
 # --- Fungsi baru untuk menampilkan gambar dari folder ---
@@ -1268,54 +1402,6 @@ def tampilkan_dan_pilih_gambar_untuk_diproses(base_dataset_dir_for_selection):
 
 
 # --- Fungsi utama untuk memproses satu gambar dan mengembalikan vektor fitur ---
-'''def proses_gambar_dari_path(image_path):
-    #print(f"\nMemproses gambar: {image_path}")
-    # 1. Pemrosesan Gambar
-    original_image = cv2.imread(image_path)
-    if original_image is None:
-        print(f"ERROR: Gagal memuat gambar {image_path}")
-        return None # Mengembalikan None jika gambar tidak bisa dimuat
-    
-    path_parts = image_path.lower().split(os.sep)
-    path_parts_lower = [part.lower() for part in path_parts]
-    print(f"path_parts: {path_parts}")
-    print(f"path_parts_lower: {path_parts_lower}")
-
-    uang_type = None
-    if '50k' in path_parts_lower and 'depan' in path_parts_lower:
-        uang_type = '50K_tampak depan'
-    elif '100k' in path_parts_lower and 'depan' in path_parts_lower:
-        uang_type = '100K_tampak depan'
-    elif ('50k' in path_parts_lower or '100k' in path_parts_lower) and 'belakang' in path_parts_lower: # Perhatikan 'belakang' saja
-        uang_type = 'tampak belakang'
-    else:
-        print(f"Peringatan: Tipe uang (50K/100K dan Depan/Belakang) tidak dapat dideteksi dari path: {image_path}. Skipping.")
-        return None, None
-    
-    
-    # Tentukan label gambar (asli=1, palsu=0)
-    # Asumsi: Gambar asli ada di folder 'asli' dan palsu di folder 'palsu'
-    label = None
-    if 'asli' in path_parts:
-        label = 1
-    elif 'palsu' in path_parts:
-        label = 0 # Atau -1, tergantung konvensi Anda
-    else:
-        print(f"Peringatan: Label (asli/palsu) tidak dapat dideteksi dari path: {image_path}. Skipping.")
-        return None, None # Gagal menentukan label
-    
-    #print(f"INFO: Memproses gambar '{os.path.basename(image_path)}' sebagai '{uang_type}' dengan label '{label}'.")
-
-    # Panggil fungsi proses_gambar dengan uang_type yang telah ditentukan
-    final_anfis_input_vector = proses_gambar(original_image, os.path.basename(image_path), uang_type=uang_type)
-    
-    if final_anfis_input_vector is None:
-        print(f"Gagal mengekstrak fitur untuk {os.path.basename(image_path)}.")
-        return None, None
-        
-    #print(f"DEBUG: Fitur berhasil diekstraksi untuk {os.path.basename(image_path)}. Shape: {final_anfis_input_vector.shape}")
-    
-    return final_anfis_input_vector, label'''
 
 def proses_gambar_dari_path(image_path):
     """
@@ -1375,6 +1461,40 @@ def proses_gambar_dari_path(image_path):
     # 5. Mengembalikan vektor fitur dan label yang ditentukan dari path
     return final_anfis_input_vector, label
 
+def predict_with_fcm(features_vector, fcm_cluster_centers, fcm_threshold, fcm_scaler):
+    """
+    Memprediksi apakah sebuah fitur adalah anomali menggunakan model Fuzzy C-Means (FCM) yang telah dilatih.
+
+    Args:
+        features_vector (np.array): Vektor fitur dari gambar yang akan diuji.
+        fcm_cluster_centers (np.array): Pusat-pusat cluster dari model FCM yang dilatih.
+        fcm_threshold (float): Nilai ambang batas yang ditentukan dari data latih normal.
+        fcm_scaler (sklearn.preprocessing.MinMaxScaler): Objek scaler yang digunakan saat pelatihan.
+
+    Returns:
+        str: "NORMAL (Uang Asli)" jika jarak ke cluster terdekat di bawah threshold,
+             "ANOMALI (Diragukan Keasliannya)" jika sebaliknya.
+    """
+    
+    # 1. Pastikan vektor fitur dalam bentuk yang benar (2D array) untuk scaler
+    # reshape(1, -1) mengubah vektor 1D menjadi 2D dengan 1 baris
+    features_scaled = fcm_scaler.transform(features_vector.reshape(1, -1))
+
+    # 2. Hitung jarak Euclidean dari vektor fitur yang diskalakan ke setiap pusat cluster
+    # np.linalg.norm menghitung norma (panjang vektor), di sini digunakan untuk jarak Euclidean
+    distances_to_centers = np.linalg.norm(features_scaled - fcm_cluster_centers, axis=1)
+
+    # 3. Temukan jarak minimal ke pusat cluster terdekat
+    minimal_distance = np.min(distances_to_centers)
+    
+    print(f"Jarak sampel ke cluster terdekat: {minimal_distance:.4f}")
+
+    # 4. Bandingkan jarak minimal dengan threshold untuk klasifikasi
+    if minimal_distance < fcm_threshold:
+        return "NORMAL (Uang Asli)"
+    else:
+        return "ANOMALI (Diragukan Keasliannya)"
+
     
 if __name__ == "__main__":
     
@@ -1390,7 +1510,7 @@ if __name__ == "__main__":
     print("Pilih opsi:")
     print("1. Ambil Gambar dari Webcam (Live Preview)")
     print("2. Tampilkan dan Pilih Gambar dari Folder untuk Diproses")
-    print("3. Proses SEMUA Gambar dari Folder (untuk membuat dataset)") # Opsi baru
+    print("3. Proses SEMUA Gambar dari Folder (untuk membuat dataset)") 
     
     #pilihan_main_menu = input("Masukkan pilihan (1/2/3): ").strip()
     pilihan_main_menu = int(input("Masukkan pilihan (1/2/3): "))
@@ -1525,61 +1645,48 @@ if __name__ == "__main__":
                             print("Ini berarti ada ketidakseragaman jumlah fitur dalam dataset ini. Periksa kembali log di atas untuk menemukan gambar yang bermasalah.")
                     else:
                         print(f"\nTidak ada gambar yang berhasil diproses untuk dataset '{name}'.")
+    elif pilihan_main_menu == 4:
+        # --- OPSI 4: Pengujian Langsung dengan Webcam & Model FCM ---
+        print("\n--- OPSI 4: Pengujian Langsung (Real-Time) dengan Fuzzy C-Means ---")
     
-    
+        # 1. Ambil gambar dari webcam menggunakan fungsi yang sudah dimodifikasi
+        gambar_tertangkap = ambil_gambar_langsung()
+        if gambar_tertangkap is not None:
+            print("\nGambar berhasil ditangkap. Memulai proses identifikasi dan ekstraksi fitur...")
+        
+            # 2. Proses gambar dan ekstraksi fitur secara otomatis
+            # Fungsi ini akan mencoba mengidentifikasi jenis uang dan mengekstrak fitur yang sesuai
+            final_hasil_ekstraksi, uang_terdeteksi = proses_gambar_akhir(gambar_tertangkap)
+            if final_hasil_ekstraksi is not None:
+                print(f"\nUang terdeteksi sebagai: {uang_terdeteksi}")
+            
+                # 3. Muat model FCM yang sesuai dengan jenis uang yang terdeteksi
+                try:
+                    # Ganti nama file ini sesuai dengan konvensi penamaan yang Anda gunakan
+                    fcm_cluster_centers = joblib.load(f'fcm_cluster_centers_{uang_terdeteksi}.joblib')
+                    fcm_scaler = joblib.load(f'fcm_scaler_{uang_terdeteksi}.joblib')
+                    fcm_threshold = joblib.load(f'fcm_threshold_{uang_terdeteksi}.joblib')
+                    print(f"Model FCM untuk '{uang_terdeteksi}' berhasil dimuat.")
+                
+                    # 4. Lakukan prediksi dengan model FCM
+                    print("\nMemulai prediksi dengan model Fuzzy C-Means...")
+                    hasil_prediksi = predict_with_fcm(final_hasil_ekstraksi, fcm_cluster_centers, fcm_threshold, fcm_scaler)
+                
+                    print(f"\n==========================================")
+                    print(f"HASIL AKHIR: {hasil_prediksi}")
+                    print(f"==========================================")
+
+                except FileNotFoundError:
+                    print(f"ERROR: File model untuk '{uang_terdeteksi}' tidak ditemukan.")
+                    print("Pengujian tidak dapat dilanjutkan. Pastikan Anda sudah melatih dan menyimpan model tersebut.")
+            else:
+                print("PERINGATAN: Gagal mengidentifikasi jenis uang atau mengekstrak fitur.")
+                print("Tidak dapat melanjutkan prediksi. Uang mungkin bukan salah satu jenis yang dilatih.")
+        else:
+            print("Pengambilan gambar dibatalkan atau gagal. Keluar dari Opsi 4.")
+
     else:
         print("Pilihan tidak valid. Harap masukkan '1', '2', atau '3'.")
 
 
-    '''elif pilihan_main_menu == 3:
-        # --- OPSI 3: Proses Semua Gambar dari Folder untuk Dataset ANFIS ---
-        print("\n--- OPSI 3: Pemrosesan Seluruh Dataset untuk Ekstraksi Fitur ANFIS ---")
-        # Sesuaikan 'dataset_base_dir' ini dengan struktur folder yang dihasilkan oleh 'ambil_gambar_dari_webcam'
-        dataset_base_dir_for_batch = 'Dataset Uang Kertas' 
-
-        if not os.path.isdir(dataset_base_dir_for_batch):
-            print(f"ERROR: Direktori dataset untuk pemrosesan tidak ditemukan: {dataset_base_dir_for_batch}")
-            print("Pastikan Anda sudah mengumpulkan gambar terlebih dahulu menggunakan opsi 1 atau perbarui 'dataset_base_dir'.")
-        else:
-            image_paths_to_process = []
-            for root, _, files in os.walk(dataset_base_dir_for_batch):
-                for file in files:
-                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
-                        image_paths_to_process.append(os.path.join(root, file))
-
-            if not image_paths_to_process:
-                print(f"Tidak ada gambar ditemukan di direktori dataset: {dataset_base_dir_for_batch}")
-            else:
-                extracted_features = []
-                extracted_labels = []
-
-                print(f"\nMemulai pemrosesan {len(image_paths_to_process)} gambar dari dataset...\n")
-
-                for img_path in image_paths_to_process:
-                    # Pastikan proses_gambar_dari_path mengembalikan 2 nilai atau 2 None
-                    features, label = proses_gambar_dari_path(img_path)
-                    if features is not None and label is not None:
-                        extracted_features.append(features)
-                        extracted_labels.append(label)
-                    else:
-                        print(f"Skipping {os.path.basename(img_path)} karena gagal diproses atau tidak dikenali.")
-                print(f"Ini adalah: {extracted_features}")
-                print(f"Ini adalah: {extracted_labels}")
-
-                if extracted_features:
-                    X_dataset = np.array(extracted_features)
-                    y_dataset = np.array(extracted_labels)
-
-                    output_features_dir = 'anfis_extracted_features'
-                    os.makedirs(output_features_dir, exist_ok=True)
-                    features_filepath = os.path.join(output_features_dir, 'anfis_features.npy')
-                    labels_filepath = os.path.join(output_features_dir, 'anfis_labels.npy')
-
-                    np.save(features_filepath, X_dataset)
-                    np.save(labels_filepath, y_dataset)
-                    print(f"\nPROSES SELESAI: Dataset fitur berhasil disimpan.")
-                    print(f"File Fitur (X): {features_filepath} (Shape: {X_dataset.shape})")
-                    print(f"File Label (Y): {labels_filepath} (Shape: {y_dataset.shape})")
-                    print(f"Isi Dataset Label (Y): \n{y_dataset}") #
-                else:
-                    print("Tidak ada gambar yang berhasil diproses untuk membentuk dataset fitur ANFIS.")'''
+    
